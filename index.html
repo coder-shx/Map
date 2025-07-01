@@ -2,45 +2,150 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Guides</title>
+    <title>Enhanced Map</title>
     <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.12.0/mapbox-gl.css" rel="stylesheet">
+    <!-- 添加距离测量控件所需的样式 -->
+    <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.css" type="text/css">
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.12.0/mapbox-gl.js"></script>
+    <!-- 添加距离测量控件所需的库 -->
+    <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.js"></script>
     <style>
         body { margin: 0; padding: 0; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+
+        /* 自定义测量结果样式 */
+        .distance-container {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.9);
+            padding: 8px 15px;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            z-index: 1;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        /* 解决控件重叠问题 */
+        .mapboxgl-ctrl-top-left {
+            top: 10px;
+            left: 10px;
+        }
+
+        .mapboxgl-ctrl-top-right {
+            top: 10px;
+            right: 10px;
+        }
+
+        .mapboxgl-ctrl-group {
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
 <div id="map"></div>
+<!-- 距离测量结果显示容器 -->
+<div id="distance" class="distance-container"></div>
+
 <script>
-    // TO MAKE THE MAP APPEAR YOU MUST
-    // ADD YOUR ACCESS TOKEN FROM
-    // https://account.mapbox.com
-    mapboxgl.accessToken = 'pk.eyJ1IjoiaXNhd255dSIsImEiOiJja2FlaWk4MG0yaHY0MnNvemRneWF0d2RnIn0.FgwFQtymPTHYPYYha5mfHw';//"Your Access Token";
+    mapboxgl.accessToken = 'pk.eyJ1IjoiaXNhd255dSIsImEiOiJja2FlaWk4MG0yaHY0MnNvemRneWF0d2RnIn0.FgwFQtymPTHYPYYha5mfHw';
 
     const map = new mapboxgl.Map({
         container: 'map',
         style: 'mapbox://styles/mapbox/streets-v9',
-        projection: 'globe', // Display the map as a globe, since satellite-v9 defaults to Mercator
+        projection: 'globe',
         zoom: 1,
         center: [30, 15]
     });
-    map.enableScrollWheelZoom();     //开启鼠标滚轮缩放
-    map.addControl(new mapboxgl.NavigationControl());
-    map.scrollZoom.disable();
 
+    // 修复滚轮缩放问题 - 删除冲突的滚动设置
+    // map.enableScrollWheelZoom(); // 已弃用，改用标准的滚动缩放
+    // map.scrollZoom.disable(); // 删除这行以启用滚轮缩放
+
+    // 添加导航控件（放大缩小）
+    map.addControl(new mapboxgl.NavigationControl(), 'top-left');
+
+    // 添加定位控件（优化响应速度）
+    const geolocate = new mapboxgl.GeolocateControl({
+        positionOptions: {
+            enableHighAccuracy: true
+        },
+        trackUserLocation: true,
+        showUserHeading: true,
+        showAccuracyCircle: true,
+        fitBoundsOptions: {
+            maxZoom: 15
+        }
+    });
+    map.addControl(geolocate, 'top-left');
+
+    // 预加载定位功能以加快响应
+    setTimeout(() => {
+        geolocate.trigger();
+    }, 1000);
+
+    // 添加距离测量控件
+    const draw = new MapboxDraw({
+        displayControlsDefault: false,
+        controls: {
+            line_string: true,
+            trash: true
+        }
+    });
+    map.addControl(draw, 'top-right');
+
+    // 显示测量距离（修复实时更新问题）
+    const distanceContainer = document.getElementById('distance');
+
+    // 监听所有绘制事件
+    map.on('draw.create', updateDistance);
+    map.on('draw.update', updateDistance);
+    map.on('draw.delete', updateDistance);
+    map.on('draw.render', updateDistance); // 添加渲染事件实时更新
+
+    function updateDistance() {
+        const data = draw.getAll();
+        distanceContainer.innerHTML = '';
+
+        if (data.features.length > 0) {
+            // 计算所有线段的总长度
+            let totalDistance = 0;
+            data.features.forEach(feature => {
+                if (feature.geometry.type === 'LineString') {
+                    const distance = turf.length(feature, { units: 'kilometers' });
+                    totalDistance += distance;
+                }
+            });
+
+            if (totalDistance > 0) {
+                let displayDistance;
+                let units;
+
+                if (totalDistance < 1) {
+                    // 小于1公里时显示米
+                    displayDistance = (totalDistance * 1000).toFixed(0);
+                    units = "米";
+                } else {
+                    // 大于1公里时显示公里
+                    displayDistance = totalDistance.toFixed(2);
+                    units = "公里";
+                }
+
+                distanceContainer.innerHTML = `<strong>距离:</strong> ${displayDistance} ${units}`;
+            }
+        }
+    }
+
+    // 其他原有代码保持不变
     map.on('style.load', () => {
-        map.setFog({}); // Set the default atmosphere style
+        map.setFog({});
     });
 
-    // The following values can be changed to control rotation speed:
-
-    // At low zooms, complete a revolution every two minutes.
     const secondsPerRevolution = 240;
-    // Above zoom level 5, do not rotate.
     const maxSpinZoom = 5;
-    // Rotate at intermediate speeds between zoom levels 3 and 5.
     const slowSpinZoom = 3;
 
     let userInteracting = false;
@@ -51,20 +156,16 @@
         if (spinEnabled && !userInteracting && zoom < maxSpinZoom) {
             let distancePerSecond = 360 / secondsPerRevolution;
             if (zoom > slowSpinZoom) {
-                // Slow spinning at higher zooms
                 const zoomDif =
                     (maxSpinZoom - zoom) / (maxSpinZoom - slowSpinZoom);
                 distancePerSecond *= zoomDif;
             }
             const center = map.getCenter();
             center.lng -= distancePerSecond;
-            // Smoothly animate the map over one second.
-            // When this animation is complete, it calls a 'moveend' event.
             map.easeTo({ center, duration: 1000, easing: (n) => n });
         }
     }
 
-    // Pause spinning on interaction
     map.on('mousedown', () => {
         userInteracting = true;
     });
@@ -72,13 +173,13 @@
         userInteracting = true;
     });
 
-    // When animation is complete, start spinning if there is no ongoing interaction
     map.on('moveend', () => {
         spinGlobe();
     });
 
     spinGlobe();
 </script>
-
+<!-- 添加Turf.js用于计算距离 -->
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
 </body>
 </html>
