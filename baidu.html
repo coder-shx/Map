@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
+  <style type="text/css">
+    body,
+    html {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      font-family: "微软雅黑";
+      font-size: 14px;
+    }
+
+    #container {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      margin: 0;
+      font-family: "微软雅黑";
+    }
+
+    #allmap {
+      width: 100%;
+      height: 80%;
+      overflow: hidden;
+      margin: 0;
+      font-family: "微软雅黑";
+    }
+
+    ul li {
+      list-style: none;
+    }
+
+    .info {
+      z-index: 999;
+      width: auto;
+      min-width: 22rem;
+      padding: .75rem 1.25rem;
+      margin-left: 1.25rem;
+      position: fixed;
+      top: 1rem;
+      background-color: #fff;
+      border-radius: .25rem;
+      font-size: 14px;
+      color: #666;
+      box-shadow: 0 2px 6px 0 rgba(27, 142, 236, 0.5);
+    }
+
+    .drawing-panel {
+      z-index: 999;
+      position: fixed;
+      bottom: 3.5rem;
+      margin-left: 30rem;
+      padding: 1rem 1rem;
+      border-radius: .25rem;
+      background-color: #fff;
+      box-shadow: 0 2px 6px 0 rgba(27, 142, 236, 0.5);
+    }
+
+    .draw-btn {
+      width: 100px;
+      height: 30px;
+      background-color: #fff;
+      color: rgba(27, 142, 236, 1);
+      border: 1px solid rgba(27, 142, 236, 1);
+      border-radius: 5px;
+      margin: 0 5px;
+    }
+
+    .draw-btn:hover {
+      background-color: rgba(27, 142, 236, 0.8);
+      color: #fff;
+    }
+
+    .btn-wrap {
+      z-index: 999;
+      position: fixed;
+      bottom: 9rem;
+      margin-left: 3rem;
+      padding: 1rem 1rem;
+      border-radius: 0.25rem;
+      background-color: #fff;
+      box-shadow: 0 2px 6px 0 rgba(27, 142, 236, 0.5);
+    }
+
+    .btn {
+      padding: 6px;
+      float: left;
+      background-color: #fff;
+      color: rgba(27, 142, 236, 1);
+      font-size: 14px;
+      border: 1px solid rgba(27, 142, 236, 1);
+      border-radius: 5px;
+      margin: 0 5px;
+      text-align: center;
+      line-height: 30px;
+    }
+
+    .btn:hover {
+      background-color: rgba(27, 142, 236, 0.8);
+      color: #fff;
+    }
+
+    #r-result {
+      width: 100%;
+    }
+
+    #coordinateDisplay {
+      position: absolute;
+      left: 10px;
+      bottom: 10px;
+      z-index: 1000;
+      background-color: white;
+      padding: 5px 10px;
+      border-radius: 3px;
+      box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+      font-size: 14px;
+    }
+  </style>
+  <script type="text/javascript" src="//api.map.baidu.com/api?type=webgl&v=1.0&ak=你的密钥"></script>
+  <script type="text/javascript"
+    src="//mapopen.cdn.bcebos.com/github/BMapGLLib/DistanceTool/src/DistanceTool.min.js"></script>
+  <link href="//mapopen.cdn.bcebos.com/github/BMapGLLib/DrawingManager/src/DrawingManager.min.css" rel="stylesheet">
+  <script type="text/javascript"
+    src="//mapopen.bj.bcebos.com/github/BMapGLLib/DrawingManager/src/DrawingManager.min.js"></script>
+
+  <title>多控件地图</title>
+</head>
+
+<body>
+  <div id="allmap"></div>
+  <div id="r-result">
+    请输入:<input type="text" id="suggestId" size="20" value="百度" style="width: 150px" />
+  </div>
+  <div id="searchResultPanel" style="
+        border: 1px solid #c0c0c0;
+        width: 150px;
+        height: auto;
+        display: none;
+      "></div>
+  <div id="coordinateDisplay">经纬度: 0, 0</div>
+  <ul class="drawing-panel">
+    <input type="button" class="draw-btn" value="开启测距" onclick="myDis.open()">
+    <input type="button" class="draw-btn" value="关闭测距" onclick="myDis.close()">
+  </ul>
+  <div>
+    <div id="container"></div>
+    <ul class="btn-wrap" style="z-index: 99">
+      <li class="night btn" onclick="updateColor()">更新彩色</li>
+      <li class="night btn" onclick="updateGray()">更新灰度</li>
+      <li class="night btn" onclick="clearColor()">移除设色</li>
+    </ul>
+  </div>
+  <script src="./distanceTool.js"></script>
+</body>
+
+</html>
+<script type="text/javascript">
+  // GL版命名空间为BMapGL
+  // 按住鼠标右键，修改倾斜角和角度
+  var map = new BMapGL.Map("allmap"); // 创建Map实例
+  map.centerAndZoom(
+    new BMapGL.Point(121.50626158858016, 31.24428040450639),
+    11
+  ); // 初始化地图,设置中心点坐标和地图级别
+  map.enableScrollWheelZoom(true); //开启鼠标滚轮缩放
+  var scaleCtrl = new BMapGL.ScaleControl(); // 添加比例尺控件
+  map.addControl(scaleCtrl);
+  var zoomCtrl = new BMapGL.ZoomControl(); // 添加缩放控件
+  map.addControl(zoomCtrl);
+  // 实时显示鼠标位置的经纬度
+  map.addEventListener("mousemove", function (e) {
+    document.getElementById("coordinateDisplay").innerHTML =
+      "经纬度: " + e.latlng.lng.toFixed(6) + ", " + e.latlng.lat.toFixed(6);
+  });
+  //获取经纬度
+  var clickButton = document.createElement("button");
+  clickButton.innerHTML = "获取经纬度";
+  clickButton.style.position = "absolute";
+  clickButton.style.top = "10px";
+  clickButton.style.right = "80px";
+  clickButton.style.zIndex = "1000";
+  document.body.appendChild(clickButton);
+  // 将监听器函数定义在外部，保持引用不变
+  function handleMapClick(e) {
+    alert("点击位置经纬度：" + e.latlng.lng + "," + e.latlng.lat);
+    // 触发一次后立即移除监听器
+    map.removeEventListener("click", handleMapClick);
+  }
+
+  clickButton.addEventListener("click", function (e) {
+    // 先移除可能存在的旧监听器
+    map.removeEventListener("click", handleMapClick);
+    // 添加新的监听器
+    map.addEventListener("click", handleMapClick);
+    // console.log("已启用地图点击监听（仅一次）");
+  });
+  // 创建定位控件
+  var locationControl = new BMapGL.LocationControl({
+    // 控件的停靠位置（可选，默认左上角）
+    anchor: BMAP_ANCHOR_TOP_RIGHT,
+    // 控件基于停靠位置的偏移量（可选）
+    offset: new BMapGL.Size(20, 20),
+  });
+  // 将控件添加到地图上
+  map.addControl(locationControl);
+
+  // 添加定位事件
+  locationControl.addEventListener("locationSuccess", function (e) {
+    var address = "";
+    address += e.addressComponent.province;
+    address += e.addressComponent.city;
+    address += e.addressComponent.district;
+    address += e.addressComponent.street;
+    address += e.addressComponent.streetNumber;
+    alert("当前定位地址为：" + address);
+  });
+  locationControl.addEventListener("locationError", function (e) {
+    alert(e.message);
+  });
+  // 添加路线规划控件
+  var routeButton = document.createElement("button");
+  routeButton.innerHTML = "路线规划";
+  routeButton.style.position = "absolute";
+  routeButton.style.top = "10px";
+  routeButton.style.left = "10px";
+  routeButton.style.zIndex = "1000";
+  routeButton.style.padding = "5px 10px";
+  routeButton.style.backgroundColor = "#fff";
+  routeButton.onclick = function () {
+    routePlan();
+  };
+  document.body.appendChild(routeButton);
+  function routePlan() {
+    routeButton.style.display = "none"; // 隐藏路线规划按钮
+    var markers = [];
+    var routeControl = null;
+    var currentMode = "driving";
+    function addRouteControl() {
+      if (routeControl) {
+        routeControl.clearResults();
+      }
+
+      var options = {
+        renderOptions: { map: map },
+        onSearchComplete: function (results) {
+          if (routeControl.getStatus() != BMAP_STATUS_SUCCESS) {
+            alert("路线规划失败，请重试");
+            return;
+          }
+          var plan = results.getPlan(0);
+          var output = "从起点到终点";
+          output +=
+            currentMode === "driving"
+              ? "驾车"
+              : currentMode === "walking"
+                ? "步行"
+                : "骑行";
+          output += "需要：" + plan.getDuration(true) + "\n";
+          output += "总路程为：" + plan.getDistance(true);
+          alert(output);
+        },
+      };
+
+      switch (currentMode) {
+        case "driving":
+          routeControl = new BMapGL.DrivingRoute(map, options);
+          break;
+        case "walking":
+          routeControl = new BMapGL.WalkingRoute(map, options);
+          break;
+        case "riding":
+          routeControl = new BMapGL.RidingRoute(map, options);
+          break;
+      }
+    }
+
+    // 创建模式选择控件
+    var modeSelect = document.createElement("select");
+    modeSelect.style.position = "absolute";
+    modeSelect.style.top = "10px";
+    modeSelect.style.left = "10px";
+    modeSelect.style.zIndex = "1000";
+    modeSelect.innerHTML = `
+        <option value="driving">驾车</option>
+        <option value="walking">步行</option>
+        <option value="riding">骑行</option>
+    `;
+    document.body.appendChild(modeSelect);
+
+    // 创建清除按钮
+    var clearButton = document.createElement("button");
+    clearButton.innerHTML = "清除标点";
+    clearButton.style.position = "absolute";
+    clearButton.style.top = "10px";
+    clearButton.style.left = "80px";
+    clearButton.style.zIndex = "1000";
+    document.body.appendChild(clearButton);
+
+    // 创建退出按钮
+    var exitButton = document.createElement("button");
+    exitButton.innerHTML = "退出路径规划";
+    exitButton.style.position = "absolute";
+    exitButton.style.top = "50px";
+    exitButton.style.left = "80px";
+    exitButton.style.zIndex = "1000";
+    document.body.appendChild(exitButton);
+
+    // 监听模式变化
+    modeSelect.addEventListener("change", function (e) {
+      currentMode = e.target.value;
+      if (markers.length === 2) {
+        addRouteControl();
+        routeControl.search(markers[0].getPosition(), markers[1].getPosition());
+      }
+    });
+
+    // 清除标点和路线
+    clearButton.addEventListener("click", function () {
+      markers.forEach((marker) => map.removeOverlay(marker));
+      markers = [];
+      if (routeControl) {
+        routeControl.clearResults();
+      }
+    });
+    // 退出路径规划
+    exitButton.addEventListener("click", function () {
+      // 清除所有标点和路线
+      markers.forEach((marker) => map.removeOverlay(marker));
+      markers = [];
+      if (routeControl) {
+        routeControl.clearResults();
+      }
+
+      // 移除所有控件
+      document.body.removeChild(modeSelect);
+      document.body.removeChild(clearButton);
+      document.body.removeChild(exitButton);
+
+      // 显示路线规划按钮
+      routeButton.style.display = "block";
+
+      // 移除地图点击事件监听器
+      map.removeEventListener("click");
+    });
+
+    // 地图点击事件
+    map.addEventListener("click", function (e) {
+      if (markers.length >= 2) {
+        alert("已有起点和终点，请先清除标点");
+        return;
+      }
+
+      var marker = new BMapGL.Marker(e.latlng);
+      map.addOverlay(marker);
+      markers.push(marker);
+
+      // 添加标签
+      var label = new BMapGL.Label(markers.length === 1 ? "起点" : "终点", {
+        position: e.latlng,
+        offset: new BMapGL.Size(20, 0),
+      });
+      marker.setLabel(label);
+
+      if (markers.length === 2) {
+        addRouteControl();
+        routeControl.search(markers[0].getPosition(), markers[1].getPosition());
+      }
+    });
+  }
+
+  //关键字输入查询
+  // 百度地图API功能
+  function G(id) {
+    return document.getElementById(id);
+  }
+  var ac = new BMapGL.Autocomplete({ //建立一个自动完成的对象
+    input: "suggestId",
+    location: map,
+  });
+
+  ac.addEventListener("onhighlight", function (e) {
+    //鼠标放在下拉列表上的事件
+    var str = "";
+    var _value = e.fromitem.value;
+    var value = "";
+    if (e.fromitem.index > -1) {
+      value =
+        _value.province +
+        _value.city +
+        _value.district +
+        _value.street +
+        _value.business;
+    }
+    str =
+      "FromItem<br />index = " + e.fromitem.index + "<br />value = " + value;
+
+    value = "";
+    if (e.toitem.index > -1) {
+      _value = e.toitem.value;
+      value =
+        _value.province +
+        _value.city +
+        _value.district +
+        _value.street +
+        _value.business;
+    }
+    str +=
+      "<br />ToItem<br />index = " + e.toitem.index + "<br />value = " + value;
+    G("searchResultPanel").innerHTML = str;
+  });
+
+  var myValue;
+  ac.addEventListener("onconfirm", function (e) {
+    //鼠标点击下拉列表后的事件
+    var _value = e.item.value;
+    myValue =
+      _value.province +
+      _value.city +
+      _value.district +
+      _value.street +
+      _value.business;
+    G("searchResultPanel").innerHTML =
+      "onconfirm<br />index = " + e.item.index + "<br />myValue = " + myValue;
+
+    setPlace();
+  });
+
+  function setPlace() {
+    map.clearOverlays(); //清除地图上所有覆盖物
+    function myFun() {
+      var pp = local.getResults().getPoi(0).point; //获取第一个智能搜索的结果
+      map.centerAndZoom(pp, 18);
+      map.addOverlay(new BMapGL.Marker(pp)); //添加标注
+    }
+    var local = new BMapGL.LocalSearch(map, {
+      //智能搜索
+      onSearchComplete: myFun,
+    });
+    local.search(myValue);
+  }
+  //颜色选择
+  function updateColor() {
+    map.updateFocusOptions({
+      open: true,
+      gray: false, // 是否使用灰度图模式
+      involve: 0, // 0 底图面线+图层 1 底图poi 2 覆盖物
+      focus: -1, // -1 全部地图使用other着色，此配置不需要商业授权；0 局部，此配置不需要商业授权
+      other: [65, 117, 250],
+    });
+  }
+
+  function updateGray() {
+    map.updateFocusOptions({
+      open: true,
+      gray: true, // 是否使用灰度图模式
+      involve: 0, // 0 底图面线+图层 1 底图poi 2 覆盖物
+      focus: -1, // -1 全部地图使用other着色，此配置不需要商业授权；0 局部，此配置不需要商业授权
+      other: [30, 30, 40],
+    });
+  }
+
+  function clearColor() {
+    map.updateFocusOptions({
+      open: false,
+    });
+  }
+  //测距组件
+  var myDis = new BMapGLLib.DistanceTool(map);
+
+  // // 监听测距过程中的鼠标事件
+  // myDis.addEventListener('drawend', function (e) {
+  //   console.log("drawend");
+  //   console.log(e.points);
+  //   console.log(e.overlays);
+  //   console.log(e.distance);
+  // });
+  // myDis.addEventListener("addpoint", function (e) {
+  //   console.log("addpoint");
+  //   console.log(e.point);
+  //   console.log(e.pixel);
+  //   console.log(e.index);
+  //   console.log(e.distance);
+  // });
+  // myDis.addEventListener("removepolyline", function (e) {
+  //   console.log("removepolyline");
+  //   console.log(e);
+  // });
+
+  //添加区域绘制
+
+
+
+</script>
